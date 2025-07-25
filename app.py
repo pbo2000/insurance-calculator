@@ -85,6 +85,7 @@ if submitted:
                 "총 환급액": insurance_total
             })
 
+            # 원본 Tkinter 코드의 계산 로직을 그대로 적용
             defer_years = max(0, 10 - years)
             defer_interest = principal_sum * DEFER_RATE * defer_years * (1 - TAX_RATE)
             denom = premium * (months * (months + 1) / 24) * (1 - TAX_RATE)
@@ -132,19 +133,17 @@ if submitted:
         if len(bank_rates) > 0:
             for years, data in sorted(bank_rates.items()):
                 with st.expander(f"**{years}년 납입** 환산 금리 상세보기", expanded=True):
-                    # 7년 납입일 경우 특별 로직 적용
-                    if years == 7:
+                    # 거치 기간이 있는 경우 (5년, 7년 등) 상세 내역 표시
+                    if data['defer_years'] > 0:
                         st.metric(
-                            label=f"7년 적금 이자율 (세후)", 
+                            label=f"{years}년 적금 이자율 (세후)", 
                             value=f"{data['rate']:.2f}%"
                         )
-                        st.info(f"7년 적금 이자: {data['net_interest']:,.0f}원")
-                        st.info(f"3년 거치 이자 효과: {data['defer_interest']:,.0f}원")
+                        st.info(f"{years}년 적금 이자: {data['net_interest']:,.0f}원")
+                        st.info(f"{data['defer_years']}년 거치 이자 효과: {data['defer_interest']:,.0f}원")
+                    # 거치 기간이 없는 경우 (10년, 20년)
                     else:
                         st.metric(
                             label=f"환산 금리 (세후)", 
                             value=f"{data['rate']:.2f}%"
                         )
-                        # 거치 기간이 0년 초과일 때만 표시
-                        if data['defer_years'] > 0:
-                            st.info(f"{data['defer_years']}년 거치 이자 효과: {data['defer_interest']:,.0f}원")
