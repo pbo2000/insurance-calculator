@@ -12,18 +12,6 @@ DEFER_RATE = 0.02 # 거치 이율 2%
 # --- Streamlit 페이지 설정 ---
 st.set_page_config(page_title="종신보험 계산기", page_icon="🏦", layout="wide")
 
-# --- CSS를 이용해 사이드바 너비 조정 ---
-st.markdown(
-    """
-    <style>
-    [data-testid="stSidebar"] {
-        width: 320px !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
 # --- 앱 제목 ---
 st.title("종신보험 은행 단리 환산 계산기 📈")
 st.write("월 보험료와 환급률을 입력하여 납입 기간별 실제 이자율을 확인해보세요.")
@@ -51,7 +39,7 @@ with st.sidebar:
     )
 
     st.subheader("납입기간 선택")
-    # st.columns를 사용해 체크박스를 가로로 정렬
+    # st.columns는 모바일에서 자동으로 세로로 정렬됩니다.
     selected_periods = {}
     cols = st.columns(len(TERM_LABELS))
     for i, label in enumerate(TERM_LABELS):
@@ -115,16 +103,14 @@ if st.button("계산 실행하기", type="primary", use_container_width=True):
 
         st.header("🏦 은행 단리 환산 금리 (세후)")
         
-        # st.columns로 결과를 나란히 표시
-        # len(bank_rates)가 0인 경우 에러가 발생할 수 있으므로, 1 이상일 때만 실행
+        # 모바일 화면을 위해 st.columns 대신 st.expander를 사용하여 결과를 세로로 표시
         if len(bank_rates) > 0:
-            rate_cols = st.columns(len(bank_rates))
-            
-            for i, (years, data) in enumerate(bank_rates.items()):
-                with rate_cols[i]:
+            for years, data in sorted(bank_rates.items()):
+                with st.expander(f"**{years}년 납입** 환산 금리 상세보기", expanded=True):
                     # st.metric으로 핵심 지표를 강조
                     st.metric(
-                        label=f"**{years}년 납입 시**", 
+                        label=f"은행 단리 환산 금리 (세후)", 
                         value=f"{data['rate']:.2f}%"
                     )
                     st.info(f"10년 거치 이자 효과: {data['defer_interest']:,.0f}원")
+
