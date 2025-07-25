@@ -24,6 +24,7 @@ with st.form("input_form"):
     st.subheader("⚙️ 입력 항목")
     
     # value=None과 placeholder를 사용하여 기본값을 비워둠
+    # st.number_input은 입력 완료 후(포커스 아웃) 자동으로 천단위 콤마를 적용합니다.
     premium = st.number_input(
         "월 보험료 (원)", 
         min_value=0,
@@ -58,8 +59,8 @@ with st.form("input_form"):
 # --- 계산 버튼 클릭 후 결과 표시 ---
 if submitted:
     # 입력값 유효성 검사
-    if premium is None or rate_pct is None or premium == 0 or rate_pct == 0:
-        st.error("월 보험료와 환급률을 모두 입력해주세요.")
+    if premium is None or rate_pct is None or premium <= 0 or rate_pct <= 0:
+        st.error("월 보험료와 환급률을 0보다 큰 값으로 입력해주세요.")
     elif not any(selected_periods.values()):
         st.warning("계산할 납입기간을 하나 이상 선택해주세요.")
     else:
@@ -93,7 +94,9 @@ if submitted:
             
             bank_rates[years] = {
                 "rate": bank_pct,
-                "defer_interest": defer_interest
+                "defer_interest": defer_interest,
+                "net_interest": net_target,
+                "defer_years": defer_years
             }
         
         st.write("---")
@@ -106,12 +109,20 @@ if submitted:
             "총 환급액": "환급액"
         }, inplace=True)
         
+        # 표 스타일링: 중앙 정렬, 글자 크기 및 굵기 조절
         st.dataframe(
             df.style.format({
                 "원금": "{:,.0f}원",
                 "이자": "{:,.0f}원",
                 "환급액": "{:,.0f}원"
-            }),
+            }).set_table_styles([{
+                'selector': 'th, td',
+                'props': [
+                    ('text-align', 'center'),
+                    ('font-size', '1.1rem'),
+                    ('font-weight', 'bold')
+                ]
+            }]),
             use_container_width=True,
             hide_index=True
         )
@@ -121,8 +132,19 @@ if submitted:
         if len(bank_rates) > 0:
             for years, data in sorted(bank_rates.items()):
                 with st.expander(f"**{years}년 납입** 환산 금리 상세보기", expanded=True):
-                    st.metric(
-                        label=f"환산 금리 (세후)", 
-                        value=f"{data['rate']:.2f}%"
-                    )
-                    st.info(f"10년 거치 이자 효과: {data['defer_interest']:,.0f}원")
+                    # 7년 납입일 경우 특별 로직 적용
+                    if years == 7:
+                        st.metric(
+                            label=f"7년 적금 이자율 (세후)", 
+                            value=f"{data['rate']:.2f}%"
+                        )
+                        st.info(f"7년 적금 이자: {data['net_interest']:,.0f}원")
+                        st.info(f"3년 거치 이자 효과: {data['defer_interest']:,.0f}원")
+                    else:
+                        st.metric(
+                            label=f"환산 금리 (세후)", 
+                            value=f"{data['rate']:.2f}%"
+                        )
+                        # 거치 기간이 0년 초과일 때만 표시
+                        if data['defer_years'] > 0:
+                            st.info(f"{data['defer_years']}년 거치 이자 효과: {data['defer_interest']:,.0f}원")
