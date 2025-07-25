@@ -7,7 +7,6 @@ import pandas as pd
 TERMS = (5, 7, 10, 20)
 TERM_LABELS = ("5년", "7년", "10년", "20년")
 TAX_RATE = 0.154  # 세율 15.4%
-DEFER_RATE = 0.02 # 거치 이율 2%
 
 # --- Streamlit 페이지 설정 ---
 # layout="centered"는 모바일에서 콘텐츠가 중앙에 집중되도록 하여 가독성을 높입니다.
@@ -76,6 +75,7 @@ if submitted:
             months = years * 12
             principal_sum = premium * months
             insurance_total = principal_sum * rate
+            # 보험의 순수 이자 (세후 개념, 보험 차익은 비과세이므로)
             interest_ins = insurance_total - principal_sum
 
             results_data.append({
@@ -85,20 +85,18 @@ if submitted:
                 "총 환급액": insurance_total
             })
 
-            # 원본 Tkinter 코드의 계산 로직을 그대로 적용
-            defer_years = max(0, 10 - years)
-            defer_interest = principal_sum * DEFER_RATE * defer_years * (1 - TAX_RATE)
-            denom = premium * (months * (months + 1) / 24) * (1 - TAX_RATE)
-            net_target = interest_ins - defer_interest
-            bank_r = net_target / denom if denom else 0
+            # --- 네이버 적금 계산기 방식에 맞춘 환산 금리 계산 로직 ---
+            # 1. 보험의 세후 순수 이자(interest_ins)를 얻기 위해 필요한 은행의 '세전' 이자를 역산.
+            equivalent_pre_tax_interest = interest_ins / (1 - TAX_RATE) if (1 - TAX_RATE) > 0 else 0
+
+            # 2. 은행 적금의 단리 이자 공식을 사용하여 이자율(r)을 역산.
+            #    이자 = 월납입액 * (n*(n+1)/2) * (r/12)  =>  r = (이자 * 12) / (월납입액 * n*(n+1)/2)
+            #    r = 이자 / (월납입액 * n*(n+1)/24)
+            denom = premium * (months * (months + 1) / 24)
+            bank_r = equivalent_pre_tax_interest / denom if denom > 0 else 0
             bank_pct = bank_r * 100
             
-            bank_rates[years] = {
-                "rate": bank_pct,
-                "defer_interest": defer_interest,
-                "net_interest": net_target,
-                "defer_years": defer_years
-            }
+            bank_rates[years] = { "rate": bank_pct }
         
         st.write("---")
         st.header("📊 계산 결과 요약")
@@ -128,22 +126,13 @@ if submitted:
             hide_index=True
         )
 
-        st.header("🏦 은행 단리 환산 금리 (세후)")
+        st.header("🏦 은행 단리 환산 금리")
         
         if len(bank_rates) > 0:
             for years, data in sorted(bank_rates.items()):
                 with st.expander(f"**{years}년 납입** 환산 금리 상세보기", expanded=True):
-                    # 거치 기간이 있는 경우 (5년, 7년 등) 상세 내역 표시
-                    if data['defer_years'] > 0:
-                        st.metric(
-                            label=f"{years}년 적금 이자율 (세후)", 
-                            value=f"{data['rate']:.2f}%"
-                        )
-                        st.info(f"{years}년 적금 이자: {data['net_interest']:,.0f}원")
-                        st.info(f"{data['defer_years']}년 거치 이자 효과: {data['defer_interest']:,.0f}원")
-                    # 거치 기간이 없는 경우 (10년, 20년)
-                    else:
-                        st.metric(
-                            label=f"환산 금리 (세후)", 
-                            value=f"{data['rate']:.2f}%"
-                        )
+                    st.metric(
+                        label=f"{years}년 만기 적금 환산 이자율 (세전 단리)", 
+                        value=f"{data['rate']:.2f}%"
+                    )
+                    st.info(f"이 보험 상품의 수익률은 연 {data['rate']:.2f}%짜리 일반과세 단리 적금 상품과 같습니다.")
