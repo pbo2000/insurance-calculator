@@ -10,17 +10,17 @@ TAX_RATE = 0.154  # 세율 15.4%
 DEFER_RATE = 0.02 # 거치 이율 2%
 
 # --- Streamlit 페이지 설정 ---
-st.set_page_config(page_title="종신보험 계산기", page_icon="🏦", layout="wide")
+# layout="centered"로 변경하여 모바일에서 콘텐츠가 중앙에 집중되도록 합니다.
+st.set_page_config(page_title="종신보험 계산기", page_icon="🏦", layout="centered")
 
 # --- 앱 제목 ---
-st.title("종신보험 은행 단리 환산 계산기 📈")
-st.write("월 보험료와 환급률을 입력하여 납입 기간별 실제 이자율을 확인해보세요.")
+st.title("종신보험 환산 계산기 📈")
+st.write("월 보험료와 환급률을 입력하여 기간별 실제 이자율을 확인해보세요.")
 
-# --- 입력 UI (사이드바에 배치하여 화면을 깔끔하게 구성) ---
+# --- 입력 UI (사이드바) ---
 with st.sidebar:
     st.header("⚙️ 입력 항목")
     
-    # st.number_input은 숫자 입력 완료 시 자동으로 천 단위 콤마를 표시해줍니다.
     premium = st.number_input(
         "월 보험료 (원)", 
         min_value=10000, 
@@ -39,21 +39,20 @@ with st.sidebar:
     )
 
     st.subheader("납입기간 선택")
-    # st.columns는 모바일에서 자동으로 세로로 정렬됩니다.
+    # 모바일에서 가장 안정적인 세로 정렬을 위해 개별 체크박스로 변경
     selected_periods = {}
-    cols = st.columns(len(TERM_LABELS))
-    for i, label in enumerate(TERM_LABELS):
-        # value=False로 변경하여 처음에는 체크가 해제된 상태로 시작
-        selected_periods[TERMS[i]] = cols[i].checkbox(label, value=False) 
+    selected_periods[TERMS[0]] = st.checkbox(TERM_LABELS[0], value=False)
+    selected_periods[TERMS[1]] = st.checkbox(TERM_LABELS[1], value=False)
+    selected_periods[TERMS[2]] = st.checkbox(TERM_LABELS[2], value=False)
+    selected_periods[TERMS[3]] = st.checkbox(TERM_LABELS[3], value=False)
 
-# --- 계산 버튼 및 결과 표시 ---
+# --- 계산 버튼 ---
 if st.button("계산 실행하기", type="primary", use_container_width=True):
     rate = rate_pct / 100.0
     
-    results_data = [] # 결과를 저장할 리스트
-    bank_rates = {}   # 환산 금리 결과를 저장할 딕셔너리
+    results_data = []
+    bank_rates = {}
 
-    # 선택된 기간에 대해서만 계산 수행
     for years, is_selected in selected_periods.items():
         if not is_selected:
             continue
@@ -63,15 +62,13 @@ if st.button("계산 실행하기", type="primary", use_container_width=True):
         insurance_total = principal_sum * rate
         interest_ins = insurance_total - principal_sum
 
-        # 표에 들어갈 데이터 추가
         results_data.append({
-            "납입 기간": f"{years}년 ({months}개월)",
+            "납입 기간": f"{years}년",
             "총 납입 원금": principal_sum,
-            "10년 시점 순수 이자": interest_ins,
-            "10년 시점 총 환급액": insurance_total
+            "순수 이자": interest_ins,
+            "총 환급액": insurance_total
         })
 
-        # 은행 단리 환산 금리 계산 로직 (기존 코드와 동일)
         defer_years = max(0, 10 - years)
         defer_interest = principal_sum * DEFER_RATE * defer_years * (1 - TAX_RATE)
         denom = premium * (months * (months + 1) / 24) * (1 - TAX_RATE)
@@ -89,28 +86,31 @@ if st.button("계산 실행하기", type="primary", use_container_width=True):
     else:
         st.header("📊 계산 결과 요약")
         
-        # 결과를 Pandas DataFrame으로 변환하여 st.dataframe으로 보기 좋게 표시
         df = pd.DataFrame(results_data)
+        # 모바일에서는 가로 스크롤이 생길 수 있으므로, 컬럼명을 줄여서 표시
+        df.rename(columns={
+            "총 납입 원금": "원금", 
+            "순수 이자": "이자", 
+            "총 환급액": "환급액"
+        }, inplace=True)
+        
         st.dataframe(
             df.style.format({
-                "총 납입 원금": "{:,.0f}원",
-                "10년 시점 순수 이자": "{:,.0f}원",
-                "10년 시점 총 환급액": "{:,.0f}원"
+                "원금": "{:,.0f}원",
+                "이자": "{:,.0f}원",
+                "환급액": "{:,.0f}원"
             }),
-            use_container_width=True, # 너비를 꽉 채움
+            use_container_width=True,
             hide_index=True
         )
 
         st.header("🏦 은행 단리 환산 금리 (세후)")
         
-        # 모바일 화면을 위해 st.columns 대신 st.expander를 사용하여 결과를 세로로 표시
         if len(bank_rates) > 0:
             for years, data in sorted(bank_rates.items()):
                 with st.expander(f"**{years}년 납입** 환산 금리 상세보기", expanded=True):
-                    # st.metric으로 핵심 지표를 강조
                     st.metric(
-                        label=f"은행 단리 환산 금리 (세후)", 
+                        label=f"환산 금리 (세후)", 
                         value=f"{data['rate']:.2f}%"
                     )
                     st.info(f"10년 거치 이자 효과: {data['defer_interest']:,.0f}원")
-
