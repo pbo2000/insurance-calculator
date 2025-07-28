@@ -45,7 +45,7 @@ with st.form("input_form"):
     st.write("납입기간 선택 (중복 선택 가능)")
     selected_periods = {}
     selected_periods[TERMS[0]] = st.checkbox(f"{TERM_LABELS[0]} 납입 (+5년 거치)", value=False)
-    selected_periods[TERMS[1]] = st.checkbox(f"{TERM_LABELS[1]} 납입 (+3년 거치)", value=True)
+    selected_periods[TERMS[1]] = st.checkbox(f"{TERM_LABELS[1]} 납입 (+3년 거치)", value=False)
     selected_periods[TERMS[2]] = st.checkbox(f"{TERM_LABELS[2]} 납입 (거치 없음)", value=False)
     selected_periods[TERMS[3]] = st.checkbox(f"{TERM_LABELS[3]} 납입 (거치 없음)", value=False)
     
