@@ -106,10 +106,8 @@ if submitted:
                 details = {
                     "is_deposit_model": True,
                     "principal": principal_sum,
-                    "savings_interest": interest_during_saving_period,
-                    "savings_total": value_before_deposit,
-                    "deposit_interest": interest_during_deposit_period,
-                    "final_total_pre_tax": total_pre_tax_value,
+                    "savings_interest_pre_tax": interest_during_saving_period,
+                    "deposit_interest_pre_tax": interest_during_deposit_period,
                     "insurance_refund": insurance_total_at_10_years
                 }
             else: # years >= 10
@@ -126,10 +124,8 @@ if submitted:
                 details = {
                     "is_deposit_model": False,
                     "principal": principal_sum,
-                    "savings_interest": interest_during_saving_period,
-                    "savings_total": total_pre_tax_value,
-                    "deposit_interest": 0,
-                    "final_total_pre_tax": total_pre_tax_value,
+                    "savings_interest_pre_tax": interest_during_saving_period,
+                    "deposit_interest_pre_tax": 0,
                     "insurance_refund": insurance_total_at_10_years
                 }
             
@@ -167,43 +163,50 @@ if submitted:
                     )
                     st.info(data['description'])
 
-                    st.subheader("🧮 환산 계산 상세 내역 (세전 기준)")
+                    st.subheader("🧮 환산 계산 상세 내역 (세후 기준)")
+
+                    # 세후 이자 및 금액 계산
+                    savings_interest_after_tax = details['savings_interest_pre_tax'] * (1 - TAX_RATE)
+                    deposit_interest_after_tax = details['deposit_interest_pre_tax'] * (1 - TAX_RATE)
+                    principal = details['principal']
                     
+                    savings_total_after_tax = principal + savings_interest_after_tax
+                    final_total_after_tax = principal + savings_interest_after_tax + deposit_interest_after_tax
+
                     if details['is_deposit_model']:
                         grace_years = 10 - years
                         st.markdown(f"**1. 적금 기간 ({years}년)**")
                         st.markdown(f"""
-                        - 납입 원금: `{details['principal']:,.0f}원`
-                        - 발생 이자: `{details['savings_interest']:,.0f}원`
-                        - **{years}년 후 원리금 합계 (A):** `{details['savings_total']:,.0f}원`
+                        - 납입 원금: `{principal:,.0f}원`
+                        - 발생 이자 (세후): `{savings_interest_after_tax:,.0f}원`
+                        - **{years}년 후 원리금 합계 (A) (세후):** `{savings_total_after_tax:,.0f}원`
                         """)
                         
                         st.markdown(f"**2. 예금 거치 기간 ({grace_years}년, 연 {DEPOSIT_RATE*100:.0f}% 복리)**")
                         st.markdown(f"""
-                        - 거치 원금 (A): `{details['savings_total']:,.0f}원`
-                        - 발생 이자: `{details['deposit_interest']:,.0f}원`
+                        - 거치 원금 (A): `{savings_total_after_tax:,.0f}원`
+                        - 발생 이자 (세후): `{deposit_interest_after_tax:,.0f}원`
                         """)
                         
                         st.markdown(f"**3. 최종 결과 (10년 후)**")
                         st.markdown(f"""
-                        - **은행 상품 총 원리금 (세전):** `{details['final_total_pre_tax']:,.0f}원`
+                        - **은행 상품 총 원리금 (세후):** `{final_total_after_tax:,.0f}원`
                         - **보험 상품 총 환급액 (비과세):** `{details['insurance_refund']:,.0f}원`
                         """)
                     else: # 적금만 있는 경우
                         st.markdown(f"**1. 적금 기간 ({years}년)**")
                         st.markdown(f"""
-                        - 납입 원금: `{details['principal']:,.0f}원`
-                        - 발생 이자: `{details['savings_interest']:,.0f}원`
+                        - 납입 원금: `{principal:,.0f}원`
+                        - 발생 이자 (세후): `{savings_interest_after_tax:,.0f}원`
                         """)
                         
                         st.markdown(f"**2. 최종 결과 ({years}년 후)**")
                         st.markdown(f"""
-                        - **은행 상품 총 원리금 (세전):** `{details['final_total_pre_tax']:,.0f}원`
+                        - **은행 상품 총 원리금 (세후):** `{final_total_after_tax:,.0f}원`
                         - **보험 상품 총 환급액 (비과세):** `{details['insurance_refund']:,.0f}원`
                         """)
                     
                     # 최종 실수령액 비교 설명
-                    bank_after_tax_total = details['principal'] + (details['savings_interest'] + details['deposit_interest']) * (1 - TAX_RATE)
-                    final_diff = bank_after_tax_total - details['insurance_refund']
+                    final_diff = final_total_after_tax - details['insurance_refund']
 
-                    st.success(f"**최종 실수령액 비교:** 은행 상품의 세후 환산 금액 (`{bank_after_tax_total:,.0f}원`)과 보험 환급액 (`{details['insurance_refund']:,.0f}원`)의 차이는 **`{final_diff:,.0f}원`**으로, 계산상 거의 동일합니다.")
+                    st.success(f"**최종 실수령액 비교:** 은행 상품의 세후 환산 금액 (`{final_total_after_tax:,.0f}원`)과 보험 환급액 (`{details['insurance_refund']:,.0f}원`)의 차이는 **`{final_diff:,.0f}원`**으로, 계산상 거의 동일합니다.")
