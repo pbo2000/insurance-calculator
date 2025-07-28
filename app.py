@@ -78,7 +78,7 @@ if submitted:
                 "10년 후 총 환급액": insurance_total_at_10_years
             })
 
-            # --- 은행 상품과 비교를 위한 환산 금리 계산 로직 (수정됨) ---
+            # --- 은행 상품과 비교를 위한 환산 금리 계산 로직 (역산) ---
             equivalent_pre_tax_interest = interest_ins / (1 - TAX_RATE) if (1 - TAX_RATE) > 0 else 0
             total_pre_tax_value = principal_sum + equivalent_pre_tax_interest
 
@@ -162,16 +162,24 @@ if submitted:
 
                     st.subheader("🧮 환산 계산 상세 내역 (세후 기준)")
 
-                    # --- 상세 내역 표시를 위한 정방향 재계산 로직 ---
-                    # 표시된 반올림 이자율을 기준으로 다시 계산하여 네이버 계산기 등과 일치시킴
+                    # --- 상세 내역 표시를 위한 정방향 재계산 로직 (수정됨) ---
                     principal = details['principal']
                     months = details['months']
-                    rounded_rate = data['rate'] / 100.0
+                    
+                    # BUG FIX: 표시되는 이자율(소수점 2자리)을 기준으로 재계산
+                    rounded_pct = round(data['rate'], 2)
+                    rounded_rate = rounded_pct / 100.0
 
-                    # 1. 적금 기간 이자 계산 (정방향)
-                    # 네이버 계산기 공식: 월납입액 * (n * (n+1) / 2) * (연이율 / 12)
-                    savings_interest_pre_tax = premium * (months * (months + 1) / 2) * (rounded_rate / 12)
-                    savings_interest_after_tax = savings_interest_pre_tax * (1 - TAX_RATE)
+                    # 1. 적금 기간 이자 계산 (정방향, 네이버 계산기 방식)
+                    # 1-1. 세전 이자 계산 후 반올림
+                    savings_interest_pre_tax_float = premium * (months * (months + 1) / 2) * (rounded_rate / 12)
+                    savings_interest_pre_tax = round(savings_interest_pre_tax_float)
+                    
+                    # 1-2. 세금 계산 후 반올림
+                    tax_on_savings = round(savings_interest_pre_tax * TAX_RATE)
+                    
+                    # 1-3. 세후 이자 계산
+                    savings_interest_after_tax = savings_interest_pre_tax - tax_on_savings
                     savings_total_after_tax = principal + savings_interest_after_tax
 
                     # 2. 예금 거치 기간 이자 계산 (정방향)
@@ -182,9 +190,14 @@ if submitted:
                         grace_years = 10 - years
                         # 예금 이자는 '세후' 원리금을 기준으로 다시 복리 계산
                         deposit_base_amount = savings_total_after_tax
-                        deposit_total_after_tax = deposit_base_amount * ((1 + DEPOSIT_RATE * (1 - TAX_RATE)) ** grace_years)
-                        deposit_interest_after_tax = deposit_total_after_tax - deposit_base_amount
-                        final_total_after_tax = deposit_total_after_tax
+                        
+                        # 예금 이자도 단계별로 세금 계산
+                        deposit_total_pre_tax = deposit_base_amount * ((1 + DEPOSIT_RATE) ** grace_years)
+                        deposit_interest_pre_tax = deposit_total_pre_tax - deposit_base_amount
+                        tax_on_deposit = round(deposit_interest_pre_tax * TAX_RATE)
+                        deposit_interest_after_tax = round(deposit_interest_pre_tax - tax_on_deposit)
+
+                        final_total_after_tax = savings_total_after_tax + deposit_interest_after_tax
 
 
                     if details['is_deposit_model']:
