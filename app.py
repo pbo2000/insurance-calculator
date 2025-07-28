@@ -92,7 +92,6 @@ if submitted:
                 
                 value_before_deposit = total_pre_tax_value / deposit_factor
                 interest_during_saving_period = value_before_deposit - principal_sum
-                interest_during_deposit_period = total_pre_tax_value - value_before_deposit
                 
                 denom = premium * (months * (months + 1) / 24.0)
                 bank_r = interest_during_saving_period / denom if denom > 0 else 0
@@ -106,9 +105,8 @@ if submitted:
                 details = {
                     "is_deposit_model": True,
                     "principal": principal_sum,
-                    "savings_interest_pre_tax": interest_during_saving_period,
-                    "deposit_interest_pre_tax": interest_during_deposit_period,
-                    "insurance_refund": insurance_total_at_10_years
+                    "insurance_refund": insurance_total_at_10_years,
+                    "months": months
                 }
             else: # years >= 10
                 interest_during_saving_period = equivalent_pre_tax_interest
@@ -124,9 +122,8 @@ if submitted:
                 details = {
                     "is_deposit_model": False,
                     "principal": principal_sum,
-                    "savings_interest_pre_tax": interest_during_saving_period,
-                    "deposit_interest_pre_tax": 0,
-                    "insurance_refund": insurance_total_at_10_years
+                    "insurance_refund": insurance_total_at_10_years,
+                    "months": months
                 }
             
             bank_rates[years] = { "rate": bank_pct, "description": description, "details": details }
@@ -165,24 +162,41 @@ if submitted:
 
                     st.subheader("🧮 환산 계산 상세 내역 (세후 기준)")
 
-                    # 세후 이자 및 금액 계산
-                    savings_interest_after_tax = details['savings_interest_pre_tax'] * (1 - TAX_RATE)
-                    deposit_interest_after_tax = details['deposit_interest_pre_tax'] * (1 - TAX_RATE)
+                    # --- 상세 내역 표시를 위한 정방향 재계산 로직 ---
+                    # 표시된 반올림 이자율을 기준으로 다시 계산하여 네이버 계산기 등과 일치시킴
                     principal = details['principal']
-                    
+                    months = details['months']
+                    rounded_rate = data['rate'] / 100.0
+
+                    # 1. 적금 기간 이자 계산 (정방향)
+                    # 네이버 계산기 공식: 월납입액 * (n * (n+1) / 2) * (연이율 / 12)
+                    savings_interest_pre_tax = premium * (months * (months + 1) / 2) * (rounded_rate / 12)
+                    savings_interest_after_tax = savings_interest_pre_tax * (1 - TAX_RATE)
                     savings_total_after_tax = principal + savings_interest_after_tax
-                    final_total_after_tax = principal + savings_interest_after_tax + deposit_interest_after_tax
+
+                    # 2. 예금 거치 기간 이자 계산 (정방향)
+                    deposit_interest_after_tax = 0
+                    final_total_after_tax = savings_total_after_tax
 
                     if details['is_deposit_model']:
                         grace_years = 10 - years
-                        st.markdown(f"**1. 적금 기간 ({years}년)**")
+                        # 예금 이자는 '세후' 원리금을 기준으로 다시 복리 계산
+                        deposit_base_amount = savings_total_after_tax
+                        deposit_total_after_tax = deposit_base_amount * ((1 + DEPOSIT_RATE * (1 - TAX_RATE)) ** grace_years)
+                        deposit_interest_after_tax = deposit_total_after_tax - deposit_base_amount
+                        final_total_after_tax = deposit_total_after_tax
+
+
+                    if details['is_deposit_model']:
+                        grace_years = 10 - years
+                        st.markdown(f"**1. 적금 기간 ({years}년, 연 {data['rate']:.2f}%)**")
                         st.markdown(f"""
                         - 납입 원금: `{principal:,.0f}원`
                         - 발생 이자 (세후): `{savings_interest_after_tax:,.0f}원`
                         - **{years}년 후 원리금 합계 (A) (세후):** `{savings_total_after_tax:,.0f}원`
                         """)
                         
-                        st.markdown(f"**2. 예금 거치 기간 ({grace_years}년, 연 {DEPOSIT_RATE*100:.0f}% 복리)**")
+                        st.markdown(f"**2. 예금 거치 기간 ({grace_years}년, 연 {DEPOSIT_RATE*100:.0f}%)**")
                         st.markdown(f"""
                         - 거치 원금 (A): `{savings_total_after_tax:,.0f}원`
                         - 발생 이자 (세후): `{deposit_interest_after_tax:,.0f}원`
@@ -194,7 +208,7 @@ if submitted:
                         - **보험 상품 총 환급액 (비과세):** `{details['insurance_refund']:,.0f}원`
                         """)
                     else: # 적금만 있는 경우
-                        st.markdown(f"**1. 적금 기간 ({years}년)**")
+                        st.markdown(f"**1. 적금 기간 ({years}년, 연 {data['rate']:.2f}%)**")
                         st.markdown(f"""
                         - 납입 원금: `{principal:,.0f}원`
                         - 발생 이자 (세후): `{savings_interest_after_tax:,.0f}원`
@@ -209,4 +223,4 @@ if submitted:
                     # 최종 실수령액 비교 설명
                     final_diff = final_total_after_tax - details['insurance_refund']
 
-                    st.success(f"**최종 실수령액 비교:** 은행 상품의 세후 환산 금액 (`{final_total_after_tax:,.0f}원`)과 보험 환급액 (`{details['insurance_refund']:,.0f}원`)의 차이는 **`{final_diff:,.0f}원`**으로, 계산상 거의 동일합니다.")
+                    st.success(f"**최종 수익률 비교:** 위 계산에 따른 은행 상품의 최종 세후 금액과 보험 환급액의 차이는 **`{final_diff:,.0f}원`** 입니다. 이 차이가 0에 가까울수록 환산된 이자율이 정확함을 의미합니다.")
